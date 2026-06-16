@@ -1,7 +1,6 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const path = require("path");
 const os = require("os");
 const mongoose = require("mongoose");
 const https = require("https");
@@ -29,7 +28,7 @@ const getLanIP = () => {
 let dbConnected = false;
 let publicIP = "unknown";
 
-// fetch public IP for clearer instructions when DB isn't reachable
+// fetch public IP
 const fetchPublicIP = () =>
   new Promise((resolve) => {
     https
@@ -41,7 +40,6 @@ const fetchPublicIP = () =>
       .on("error", () => resolve("unknown"));
   });
 
-// kick off async fetch (non-blocking)
 fetchPublicIP().then((ip) => {
   publicIP = ip || "unknown";
 });
@@ -53,16 +51,20 @@ const connectDB = async (isRetry = false) => {
       socketTimeoutMS: 45000,
       family: 4,
     });
+
     dbConnected = true;
+
     console.log(`\n✅ MongoDB Connected: ${mongoose.connection.host}`);
     console.log(`📦 Database: ${mongoose.connection.name}`);
     console.log(`📋 Collections: users, payments, trips\n`);
   } catch (err) {
     if (!isRetry) {
-      console.warn("\n⚠️  MongoDB not connected yet — server starting anyway.");
-      console.warn(`   Whitelist your public IP (${publicIP}) in Atlas → Network Access`);
-      console.warn("   Or add 0.0.0.0/0 temporarily to allow all IPs; retrying every 10 seconds...\n");
+      console.warn("\n⚠️ MongoDB not connected yet — retrying...");
+      console.warn(
+        `Whitelist your IP (${publicIP}) in MongoDB Atlas`
+      );
     }
+
     setTimeout(() => connectDB(true), 10000);
   }
 };
@@ -72,15 +74,18 @@ app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Serve React production build ─────────────
-const DIST = path.join(__dirname, "..", "dist");
-app.use(express.static(DIST));
+// ─── Root Route ───────────────────────────────
+app.get("/", (req, res) => {
+  res.send("Backend Running");
+});
 
 // ─── Health check ─────────────────────────────
 app.get("/api/health", (req, res) => {
   res.json({
     status: dbConnected ? "ok" : "degraded",
-    db: dbConnected ? "connected" : "disconnected — whitelist IP in Atlas",
+    db: dbConnected
+      ? "connected"
+      : "disconnected — whitelist IP in Atlas",
     timestamp: new Date().toISOString(),
   });
 });
@@ -89,9 +94,10 @@ app.get("/api/health", (req, res) => {
 const requireDB = (req, res, next) => {
   if (!dbConnected) {
     return res.status(503).json({
-      error: `Database not connected. Please whitelist your public IP (${publicIP}) in MongoDB Atlas → Network Access, then wait ~30s.`,
+      error: `Database not connected. Please whitelist your public IP (${publicIP}) in MongoDB Atlas.`,
     });
   }
+
   next();
 };
 
@@ -100,11 +106,6 @@ app.use("/api/auth", requireDB, authRoutes);
 app.use("/api/payments", requireDB, paymentRoutes);
 app.use("/api/trips", requireDB, tripRoutes);
 
-// ─── SPA Fallback ─────────────────────────────
-app.get("*", (req, res) => {
-  res.sendFile(path.join(DIST, "index.html"));
-});
-
 // ─── Global error handler ─────────────────────
 app.use((err, req, res, _next) => {
   console.error("Unhandled error:", err);
@@ -112,15 +113,15 @@ app.use((err, req, res, _next) => {
 });
 
 // ─── Start ────────────────────────────────────
-connectDB(); // start connecting (retries in background)
+connectDB();
 
 app.listen(PORT, "0.0.0.0", () => {
   const lan = getLanIP();
+
   console.log(`\n╔═══════════════════════════════════════════════╗`);
-  console.log(`║       🚀  Smart Tour Planner — Live           ║`);
+  console.log(`║       🚀 Smart Tour Planner Backend Live     ║`);
   console.log(`╠═══════════════════════════════════════════════╣`);
-  console.log(`║  🌐  Local:   http://localhost:${PORT}           ║`);
-  console.log(`║  🌐  Network: http://${lan}:${PORT}    ║`);
+  console.log(`║ 🌐 Local:   http://localhost:${PORT}              ║`);
+  console.log(`║ 🌐 Network: http://${lan}:${PORT}           ║`);
   console.log(`╚═══════════════════════════════════════════════╝\n`);
 });
-
