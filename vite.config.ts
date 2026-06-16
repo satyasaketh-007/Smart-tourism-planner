@@ -12,13 +12,13 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
     // Proxy all /api requests to the Express backend
-    proxy: {
-      "/api": {
-        target: "http://localhost:5000",
-        changeOrigin: true,
-        secure: false,
-      },
-    },
+proxy: {
+  "/api": {
+    target: "https://smart-tourism-planner.onrender.com",
+    changeOrigin: true,
+    secure: true,
+  },
+},
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
